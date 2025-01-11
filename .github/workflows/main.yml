@@ -81,7 +81,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DSPIRV_CROSS_SHARED=ON \
             -DSPIRV_CROSS_STATIC=ON \
-            -DCMAKE_INSTALL_PREFIX=${PWD}/spirv_cross_prefix
+            -DCMAKE_INSTALL_PREFIX=${PWD}/spirv_cross_prefix \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
           cmake --build spirv_cross_build
           cmake --install spirv_cross_build
 
@@ -103,7 +105,9 @@ jobs:
             -DSDLSHADERCROSS_INSTALL=ON \
             -DSDLSHADERCROSS_INSTALL_RUNTIME=ON \
             -DSDLSHADERCROSS_INSTALL_CPACK=ON \
-            -DCMAKE_INSTALL_PREFIX="${PWD}/prefix"
+            -DCMAKE_INSTALL_PREFIX="${PWD}/prefix" \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build (CMake)
         id: build
