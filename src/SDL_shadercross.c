@@ -1696,12 +1696,17 @@ void SDL_ShaderCross_INTERNAL_GetIOVars(
 SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
     const Uint8 *code,
     size_t codeSize,
+    const char *entrypoint,
+    SDL_ShaderCross_ShaderStage shaderStage,
     SDL_PropertiesID metadataProps
 ) {
     spvc_result result;
     spvc_context context = NULL;
     spvc_parsed_ir ir = NULL;
     spvc_compiler compiler = NULL;
+    size_t num_total_texture_samplers = 0;
+    size_t num_total_storage_buffers = 0;
+    size_t num_total_uniform_buffers = 0;
     size_t num_texture_samplers = 0;
     size_t num_storage_textures = 0;
     size_t num_storage_buffers = 0;
@@ -1712,10 +1717,20 @@ SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
     size_t num_outputs = 0;
     size_t num_separate_samplers = 0; // HLSL edge case
     size_t num_separate_images = 0; // HLSL edge case
+    SpvExecutionModel executionModel;
     (void) metadataProps;
 
     if (code == NULL) {
         SDL_InvalidParamError("code");
+        return NULL;
+    }
+
+    if (shaderStage == SDL_SHADERCROSS_SHADERSTAGE_VERTEX) {
+        executionModel = SpvExecutionModelVertex;
+    } else if (shaderStage == SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT) {
+        executionModel = SpvExecutionModelFragment;
+    } else {
+        SDL_InvalidParamError("shaderStage");
         return NULL;
     }
 
@@ -1742,6 +1757,9 @@ SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
         return NULL;
     }
 
+    /* Set the entry point and shader stage */
+    spvc_compiler_set_entry_point(compiler, entrypoint, executionModel);
+
     spvc_resources resources;
     spvc_reflected_resource *reflected_resources;
 
@@ -1757,7 +1775,7 @@ SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
         resources,
         SPVC_RESOURCE_TYPE_SAMPLED_IMAGE,
         (const spvc_reflected_resource **)&reflected_resources,
-        &num_texture_samplers);
+        &num_total_texture_samplers);
     if (result < 0) {
         SPVC_ERROR(spvc_resources_get_resource_list_for_type);
         spvc_context_destroy(context);
@@ -1810,11 +1828,31 @@ SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
         resources,
         SPVC_RESOURCE_TYPE_STORAGE_BUFFER,
         (const spvc_reflected_resource **)&reflected_resources,
-        &num_storage_buffers);
+        &num_total_storage_buffers);
     if (result < 0) {
         SPVC_ERROR(spvc_resources_get_resource_list_for_type);
         spvc_context_destroy(context);
         return NULL;
+    }
+
+    for (size_t i = 0; i < num_total_storage_buffers; i += 1) {
+        if (!spvc_compiler_has_decoration(compiler, reflected_resources[i].id, SpvDecorationDescriptorSet) || !spvc_compiler_has_decoration(compiler, reflected_resources[i].id, SpvDecorationBinding)) {
+            SDL_SetError("%s", "Shader resources must have descriptor set and binding index!");
+            spvc_context_destroy(context);
+            return NULL;
+        }
+
+        unsigned int descriptor_set_index = spvc_compiler_get_decoration(compiler, reflected_resources[i].id, SpvDecorationDescriptorSet);
+
+        if (shaderStage == SDL_SHADERCROSS_SHADERSTAGE_VERTEX) {
+            if (descriptor_set_index == 0) {
+                num_storage_buffers += 1;
+            }
+        } else {
+            if (descriptor_set_index == 2) {
+                num_storage_buffers += 1;
+            }
+        }
     }
 
     // Uniform buffers
@@ -1822,7 +1860,28 @@ SDL_ShaderCross_GraphicsShaderMetadata * SDL_ShaderCross_ReflectGraphicsSPIRV(
         resources,
         SPVC_RESOURCE_TYPE_UNIFORM_BUFFER,
         (const spvc_reflected_resource **)&reflected_resources,
-        &num_uniform_buffers);
+        &num_total_uniform_buffers);
+
+    for (size_t i = 0; i < num_total_uniform_buffers; i += 1) {
+        if (!spvc_compiler_has_decoration(compiler, reflected_resources[i].id, SpvDecorationDescriptorSet) || !spvc_compiler_has_decoration(compiler, reflected_resources[i].id, SpvDecorationBinding)) {
+            SDL_SetError("%s", "Shader resources must have descriptor set and binding index!");
+            spvc_context_destroy(context);
+            return NULL;
+        }
+
+        unsigned int descriptor_set_index = spvc_compiler_get_decoration(compiler, reflected_resources[i].id, SpvDecorationDescriptorSet);
+
+        if (shaderStage == SDL_SHADERCROSS_SHADERSTAGE_VERTEX) {
+            if (descriptor_set_index == 1) {
+                num_uniform_buffers += 1;
+            }
+        } else {
+            if (descriptor_set_index == 3) {
+                num_uniform_buffers += 1;
+            }
+        }
+    }
+
     if (result < 0) {
         SPVC_ERROR(spvc_resources_get_resource_list_for_type);
         spvc_context_destroy(context);
@@ -2234,6 +2293,8 @@ static void *SDL_ShaderCross_INTERNAL_CompileFromSPIRV(
             SDL_ShaderCross_ReflectGraphicsSPIRV(
                 info->bytecode,
                 info->bytecode_size,
+                info->entrypoint,
+                info->shader_stage,
                 metadataProps);
 
         if (shaderInfo == NULL) {

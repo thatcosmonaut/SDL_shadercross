@@ -244,6 +244,8 @@ extern SDL_DECLSPEC SDL_GPUComputePipeline * SDLCALL SDL_ShaderCross_CompileComp
 extern SDL_DECLSPEC SDL_ShaderCross_GraphicsShaderMetadata * SDLCALL SDL_ShaderCross_ReflectGraphicsSPIRV(
     const Uint8 *bytecode,
     size_t bytecode_size,
+    const char *entrypoint,
+    SDL_ShaderCross_ShaderStage shader_stage,
     SDL_PropertiesID props);
 
 /**

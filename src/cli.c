@@ -577,6 +577,8 @@ int main(int argc, char *argv[])
                     SDL_ShaderCross_GraphicsShaderMetadata *info = SDL_ShaderCross_ReflectGraphicsSPIRV(
                         fileData,
                         fileSize,
+                        entrypointName,
+                        shaderStage,
                         0);
                     if (info) {
                         write_graphics_reflect_json(outputIO, info);
@@ -753,6 +755,8 @@ int main(int argc, char *argv[])
                     SDL_ShaderCross_GraphicsShaderMetadata *info = SDL_ShaderCross_ReflectGraphicsSPIRV(
                         spirv,
                         bytecodeSize,
+                        entrypointName,
+                        shaderStage,
                         0);
                     SDL_free(spirv);
 
